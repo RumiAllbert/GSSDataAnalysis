@@ -1,0 +1,186 @@
+---
+title: "Final Project Part 1"
+author: "Rumi Allbert"
+date: "April 29, 2021"
+always_allow_html: true
+output:
+  #pdf_document:
+    #toc: yes
+    #github_document:
+      #default
+  html_document:
+    toc: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                    fig.align = 'center')
+library(tidyverse)
+library(tidymodels)
+library(dsbox)
+```
+## Introduction {.chapter}
+
+In this project I analyze data from the GSS, which is a dataset gathered about contemporary American society in order to track and describe patterns and constants in attitudes, behaviors, and attributes, in this project. The GSS includes a standard core of demographic, behavioral, and attitude questions, as well as special interest topics. In this project we use GSS to analyze values of population parameters of interest about US adults. Some of the questions presented in this project are: what percentage of the people surveyed fell that they have been harassed at work? Are high educated individuals more liberal or conservative? And many more.
+
+## Section 1: Harassment at work {.chapter}
+
+
+#### Question 1: What are the possible responses to this question and how many respondents chose each of these answers?
+##### Answer: The possible responses are Does not apply (96), NA (1398), Yes (237), and No (1136)
+
+```{r}
+gss16 %>%
+    count(harass5)
+```
+
+
+#### Question 2: What percent of the respondents for whom this question is applicable (i.e. excluding NAs and Does not applys) have been harassed by their superiors or co-workers at their job.
+##### Answer: 17.26% of respondants for whom the question is applicable answered yes to being harassed by their superiors or co-workers at their job.
+
+```{r}
+gss16harass <-  gss16 %>%
+    count(harass5)
+gss16harass <-  gss16harass[-c(1,4),]
+gss16harass
+yes_percentage <- 237 / (1136 + 237)
+message("Answered yes :" , yes_percentage*100 , "%")
+```
+
+
+## Section 2: Time spent on email {.chapter}
+
+
+#### Question 3: Create a new variable called email that combines these two variables to reports the number of minutes the respondents spend on email weekly
+##### Answer:
+
+```{r}
+gss16 <- gss16 %>%
+  mutate(email = emailhr*60 + emailmin)
+select(gss16, email)
+```
+
+
+#### Question 4: Visualize the distribution of this new variable. Find the mean and the median number of minutes respondents spend on email weekly. Is the mean or the median a better measure of the typical among of time Americans spend on email weekly? Why?
+##### Answer: I believe that the median would be a better measure because as we can see in the illustration below, the data is skewed, and if we utilize the mean the estimate will be affected the the skew, whereas with the median the skew doesn't affect the estimate. The median is 120 while the mean is 416.84
+
+```{r}
+ggplot(gss16, aes(email)) + geom_histogram(binwidth = 100)
+
+emailmedian <- median(gss16$email, na.rm=TRUE)
+emailmean <- mean(gss16$email, na.rm = TRUE)
+emailmedian
+emailmean
+```
+
+#### Question 5: Create another new variable, snap_insta that is coded as “Yes” if the respondent reported using any of Snapchat (snapchat) or Instagram (instagrm), and “No” if not. If the recorded value was NA for both of these questions, the value in your new variable should also be NA
+##### Answer: 
+
+```{r}
+gss16 <- gss16 %>%
+  mutate(snap_insta = if_else(snapchat == "Yes" | instagrm == "Yes", "Yes", "No"))
+select(gss16,snap_insta)
+```
+
+#### Question 6: Calculate the percentage of Yes’s for snap_insta among those who answered the question, i.e. excluding NAs
+##### Answer: The percentage of Yes for snap_insta among those who answered the question is 17.93%
+
+```{r}
+snap_insta_yes <- gss16 %>%
+  filter(snap_insta == "Yes") %>%
+  nrow() / nrow(gss16) 
+  
+snap_insta_yes_percentage <- snap_insta_yes * 100
+message(snap_insta_yes_percentage , "%")
+```
+
+
+#### Question 7: What are the possible responses to the question Last week were you working full time, part time, going to school, keeping house, or what? and how many respondents chose each of these answers?
+##### Answer: The possible responses to the question are: Keeping house (284), Other (89), Retired (574), School (76) , Temp not working (57), Unempl, laid off (118), Working fulltime (1321), Working parttime (345), NA (3)
+
+```{r}
+gss16 %>% 
+  count(wrkstat)
+```
+
+#### Question 8: Fit a model predicting email (number of minutes per week spent on email) from educ (number of years of education), wrkstat, and snap_insta. Interpret the slopes for each of these variables.
+##### Answer: One could interpret the slope in words by saying that for every additional year that one spends on education, there will be an increase in the amount of time spent on email weekly, 29.63 minutes more to be exact.
+```{r}
+email_fitting <- linear_reg() %>%
+  set_engine("lm") %>%
+  fit(email ~ educ + wrkstat + snap_insta, gss16)
+tidy(email_fitting)
+```
+
+#### Question 9: Create a predicted values vs. residuals plot for this model. Are there any issues with the model? If yes, describe them.
+##### Answer:
+
+```{r}
+email_fit_aug <- augment(email_fitting$fit)
+email_fit_aug
+ggplot(email_fit_aug) + geom_point(aes(.fitted, .resid)) 
+```
+
+
+## Section 3: Political views and science research {.chapter}
+
+#### Question 10: In a new variable, recode advfront such that Strongly Agree and Agree are mapped to "Yes", and Disagree and Strongly disagree are mapped to "No". The remaining levels can be left as is. Don’t overwrite the existing advfront, instead pick a different, informative name for your new variable.
+##### Answer:
+```{r}
+gss16 <- gss16 %>%
+  mutate(advscience = if_else(advfront == "Strongly agree" | advfront == "Agree", "Yes", "No"))
+head(gss16)
+```
+
+
+#### Question 11: In a new variable, recode polviews such that Extremely liberal, Liberal, and Slightly liberal, are mapped to "Liberal", and Slghtly conservative, Conservative, and Extrmly conservative disagree are mapped to "Conservative". The remaining levels can be le as is. Make sure that the levels are in a reasonable order. Don’t overwrite the existing polviews, instead pick a dierent, informative name for your new variable.
+##### Answer:
+
+```{r}
+gss16 <- gss16 %>%
+  mutate(simplepolviews = case_when(
+    polviews %in% c("Extremely liberal", "Liberal", "Slightly liberal") ~ "Liberal",
+    polviews %in% c("Slghtly conservative", "Conservative", "Extrmly conservative") ~ "Conservative", 
+    TRUE ~ polviews
+  ), simplepolviews = fct_relevel(simplepolviews, "Conservative", "Moderate", "Liberal"))
+head(gss16)
+
+```
+
+#### Question 12: Create a visualization that displays the relationship between these two new variables and interpret it
+##### Answer:
+
+```{r}
+gss16 %>%
+  filter(!is.na(simplepolviews), !is.na(advscience)) %>%
+  ggplot(aes(x = advscience, fill = simplepolviews)) +
+  geom_bar(position = "dodge") + labs(
+    title = "Political stance and advancement of science by fed government",
+    subtitle = "Data from GSS16",
+    x = "Should the development of science be supported by the Fed government?",
+    fill = "Political Stance"
+  )
+```
+
+
+## Section 4: Individual question {.chapter}
+
+#### Question 12: Are 'high' education people more liberal or conservative? Visualize the relationship between these variables.
+##### Answer: By observing the visualization below it is evident that the political stance of people who are 'highly' educated is more liberal than conservative or moderate. One can also observe that the higher the education, the more liberal people there will be. We can also observe that the distribution of people who receive about 12 years of education (high school) is almost evenly distributed. 
+
+```{r}
+gss16 %>%
+  filter(!is.na(simplepolviews), !is.na(educ)) %>%
+  ggplot(aes(x = educ, fill = simplepolviews)) +
+  geom_histogram(position = "fill", binwidth = 4) + labs(
+    title = "Level of Education Vs Political stance",
+    subtitle = "Data from GSS16",
+    x = "Number of years in education",
+    fill = "Political Stance"
+  ) 
+```
+
+## Conclusion {.chapter}
+
+In the process of utilizing simple yet powerful data cleaning, and modeling skills I was able to answer various questions given the data in the dataset. Some of the questions call for a data cleaning process by creating new variables, creating models, as well as renaming values. Additionally, some of the questions ask for statistics such as proportions of the answers in the population. I believe these findings are sufficient to predict and come to conclusions about the population.
